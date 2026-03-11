@@ -161,11 +161,10 @@ public class AsyncChestDepositTask extends Thread {
 		public void run() {
 			var chestLocation = this.remainingChestLocations.poll();
 			if (chestLocation == null) {
-				if (this.runningDepositRecord.shulkersDeposited > 0 || this.runningDepositRecord.shulkersSkipped > 0) {
+				if (this.runningDepositRecord.shulkersDeposited > 0) {
 					Chat.sendMessage(this.player, Level.Success, Messages.SuccessfulDepositAllWithShulkers,
 						String.valueOf(this.runningDepositRecord.totalItems),
-						String.valueOf(this.runningDepositRecord.shulkersDeposited),
-						String.valueOf(this.runningDepositRecord.shulkersSkipped));
+						String.valueOf(this.runningDepositRecord.shulkersDeposited));
 				} else {
 					Chat.sendMessage(this.player, Level.Success, Messages.SuccessfulDepositAll2, String.valueOf(this.runningDepositRecord.totalItems));
 				}

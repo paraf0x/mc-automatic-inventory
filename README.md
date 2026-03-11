@@ -10,6 +10,8 @@
 
 Instantly dump all your loot into all the right chests. Finds all chests (within one chunk of your location) that you have permission to open and automatically deposits any items from your backpack (not your hotbar) which match items in those chests.
 
+**Shulker Box Handling:** Named shulker boxes match by name. Unnamed shulker boxes are only deposited if completely full with a single item type (e.g., a shulker with 27 full stacks of cobblestone goes into a chest containing cobblestone). Mixed or partially filled shulkers stay in your inventory.
+
 Aliases: `da`, `dumpitems`, `dumploot`, `depositloot`
 
 ### Quick Deposit (Shift-left-click)
