@@ -1,6 +1,5 @@
 package dev.chaws.automaticinventory.tasks;
 
-import org.bukkit.craftbukkit.util.CraftMagicNumbers;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;

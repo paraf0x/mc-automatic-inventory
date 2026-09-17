@@ -5,17 +5,15 @@ import java.net.URI
 
 plugins {
     `java-library`
-    // Check for new versions at https://plugins.gradle.org/plugin/io.papermc.paperweight.userdev
-    id("io.papermc.paperweight.userdev") version "1.7.1"
     // Adds runServer and runMojangMappedServer tasks for testing
-    id("xyz.jpenilla.run-paper") version "2.3.0"
+    id("xyz.jpenilla.run-paper") version "3.1.0"
     // Generates plugin.yml based on the Gradle config
-    id("xyz.jpenilla.resource-factory-bukkit-convention") version "1.1.1"
+    id("xyz.jpenilla.resource-factory-bukkit-convention") version "1.3.1"
 //    id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
 group = "dev.chaws.automaticinventory"
-version = "4.1.0"
+version = "4.2.0"
 description = "Automatic Inventory PaperMC Plugin"
 
 repositories {
@@ -36,32 +34,23 @@ repositories {
 }
 
 java {
-    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+    toolchain.languageVersion.set(JavaLanguageVersion.of(25))
 }
 
 dependencies {
-    paperweight.paperDevBundle("1.21-R0.1-SNAPSHOT")
-    // paperweight.foliaDevBundle("1.21-R0.1-SNAPSHOT")
-    // paperweight.devBundle("com.example.paperfork", "1.21-R0.1-SNAPSHOT")
+    // No NMS is used anywhere in src/, so the plugin compiles against the plain API
+    // instead of a paperweight dev bundle — nothing needs remapping.
+    compileOnly("io.papermc.paper:paper-api:26.3.build.8-alpha")
     implementation("org.bstats:bstats-bukkit:3.0.2")
 
-    // Add ASM dependency to support Java 21 class files
-    implementation("org.ow2.asm:asm:9.7")
-    implementation("org.ow2.asm:asm-commons:9.7")
+    // Add ASM dependency to support Java 25 class files
+    implementation("org.ow2.asm:asm:9.9")
+    implementation("org.ow2.asm:asm-commons:9.9")
 }
 
-// Option 1)
-// For >=1.20.5 when you don"t care about supporting spigot
-// paperweight.reobfArtifactConfiguration = io.papermc.paperweight.userdev.ReobfArtifactConfiguration.MOJANG_PRODUCTION
-
-// Option 2)
-// For 1.20.4 or below, or when you care about supporting Spigot on >=1.20.5
-// Configure reobfJar to run when invoking the build task
-paperweight.reobfArtifactConfiguration = io.papermc.paperweight.userdev.ReobfArtifactConfiguration.REOBF_PRODUCTION
 tasks {
     assemble {
 //        dependsOn(shadowJar)
-        dependsOn(reobfJar)
     }
 
 //    named<ShadowJar>("shadowJar") {
@@ -75,7 +64,7 @@ bukkitPluginYaml {
     // TODO: Try POSTWORLD
     load = BukkitPluginYaml.PluginLoadOrder.STARTUP
     authors = listOf("Chaws", "Pugabyte", "AllTheCode", "RoboMWM", "Big_Scary")
-    apiVersion = "1.21"
+    apiVersion = "26.3"
     commands.register("autosort") {
         description = "Toggles auto-sorting options."
         permission = "automaticinventory.sortchests"
