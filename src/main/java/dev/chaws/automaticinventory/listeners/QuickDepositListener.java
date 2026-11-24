@@ -47,6 +47,11 @@ public class QuickDepositListener implements Listener {
 
 		event.setCancelled(true);
 
+		if (PlayerConfig.fromPlayer(player).isUnreadable()) {
+			Chat.sendMessage(player, Level.Error, Messages.PlayerDataUnreadable);
+			return;
+		}
+
 		var aboveBlockID = clickedBlock.getRelative(BlockFace.UP).getType();
 		if (!BlockUtilities.isOpenable(clickedBlock.getType(), aboveBlockID)) {
 			Chat.sendMessage(player, Level.Error, Messages.ChestLidBlocked);

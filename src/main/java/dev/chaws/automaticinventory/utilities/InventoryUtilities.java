@@ -2,6 +2,7 @@ package dev.chaws.automaticinventory.utilities;
 
 import dev.chaws.automaticinventory.common.DepositRecord;
 import dev.chaws.automaticinventory.configuration.GlobalConfig;
+import dev.chaws.automaticinventory.configuration.PlayerConfig;
 import org.bukkit.block.Barrel;
 import org.bukkit.block.Chest;
 import org.bukkit.block.DoubleChest;
@@ -72,6 +73,15 @@ public class InventoryUtilities {
 	public static DepositRecord depositMatching(PlayerInventory source, Inventory destination, boolean depositHotbar) {
 		var eligibleSignatures = new HashSet<String>();
 		var deposits = new DepositRecord();
+		var player = getPlayer(source);
+		var playerConfig = player == null ? null : PlayerConfig.fromPlayer(player);
+		if (playerConfig != null && playerConfig.isUnreadable()) {
+			// The locks are unknown, so moving anything could deposit a locked item
+			return deposits;
+		}
+
+		var locks = playerConfig == null ? null : playerConfig.getDepositLocks();
+		var destinationIsShulkerBox = destination.getType() == InventoryType.SHULKER_BOX;
 		for (var i = 0; i < destination.getSize(); i++) {
 			var destinationStack = destination.getItem(i);
 			if (destinationStack == null) {
@@ -97,12 +107,22 @@ public class InventoryUtilities {
 				continue;
 			}
 
+			if (locks != null && locks.isLocked(ItemTypes.getId(sourceStack.getType()))) {
+				continue;
+			}
+
 			var signature = ItemUtilities.getSignature(sourceStack);
 			var sourceStackSize = sourceStack.getAmount();
 			var isShulkerBox = MaterialUtilities.isShulkerBox(sourceStack.getType());
 
 			// Shulker box special handling
 			if (isShulkerBox) {
+				// Inventory#addItem skips the vanilla slot check, so it would nest shulker boxes
+				if (destinationIsShulkerBox) {
+					deposits.shulkersSkipped++;
+					continue;
+				}
+
 				var meta = sourceStack.getItemMeta();
 
 				// Priority 1: Has custom name → use normal signature (as before)
@@ -132,7 +152,10 @@ public class InventoryUtilities {
 					var notMovedCount = notMoved.values().iterator().next().getAmount();
 					var movedCount = sourceStackSize - notMovedCount;
 					if (movedCount == 0) {
-						eligibleSignatures.remove(signature);
+						// A shulker shares its signature with its content, which may still fit into partial stacks
+						if (!isShulkerBox) {
+							eligibleSignatures.remove(signature);
+						}
 					} else {
 						var newAmount = sourceStackSize - movedCount;
 						sourceStack.setAmount(newAmount);

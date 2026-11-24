@@ -13,6 +13,8 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.NotNull;
 
+import java.util.List;
+
 public class DepositAllCommand extends AutomaticInventoryCommand {
 	@Override
 	public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
@@ -25,6 +27,17 @@ public class DepositAllCommand extends AutomaticInventoryCommand {
 		//ensure player has feature enabled
 		if (!PlayerConfig.featureEnabled(Features.DepositAll, player)) {
 			Chat.sendMessage(player, Level.Error, Messages.NoPermissionForFeature);
+			return true;
+		}
+
+		if (playerConfig.isUnreadable()) {
+			Chat.sendMessage(player, Level.Error, Messages.PlayerDataUnreadable);
+			return true;
+		}
+
+		// Only the bare command deposits, so that a typo can't empty the inventory
+		if (args.length > 0) {
+			DepositLockCommands.run(player, playerConfig, label, args);
 			return true;
 		}
 
@@ -60,5 +73,19 @@ public class DepositAllCommand extends AutomaticInventoryCommand {
 		}
 
 		return true;
+	}
+
+	@Override
+	public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+		if (!(sender instanceof Player player) || !PlayerConfig.featureEnabled(Features.DepositAll, player)) {
+			return List.of();
+		}
+
+		var playerConfig = PlayerConfig.fromPlayer(player);
+		if (playerConfig.isUnreadable()) {
+			return List.of();
+		}
+
+		return DepositLockCommands.complete(player, playerConfig, args);
 	}
 }

@@ -13,7 +13,7 @@ plugins {
 }
 
 group = "dev.chaws.automaticinventory"
-version = "4.2.0"
+version = "4.3.0"
 description = "Automatic Inventory PaperMC Plugin"
 
 repositories {
@@ -74,7 +74,7 @@ bukkitPluginYaml {
         aliases = listOf("da", "dumpitems", "dumploot", "depositloot")
         description = "Deposits your non-hotbar inventory into any nearby chests containing matching items."
         permission = "automaticinventory.depositall"
-        usage = "/DepositAll"
+        usage = "/DepositAll [lock <item> | unlock <item> | list]"
     }
     commands.register("quickdeposit") {
         description = "Toggles quick deposit (shift+left click on chests)."

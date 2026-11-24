@@ -48,6 +48,21 @@ public class LocalizedMessages {
 		instance.addDefault(defaults, Messages.AutoRefillHelp, "Options are /autorefill toggle, /autorefill enable, and /autorefill disable.");
 		instance.addDefault(defaults, Messages.AutoRefillEnabled, "Auto refill enabled.");
 		instance.addDefault(defaults, Messages.AutoRefillDisabled, "Auto refill disabled.");
+		instance.addDefault(defaults, Messages.DepositAllHelp, "Options are /{0}, /{0} lock <item>, /{0} unlock <item> and /{0} list or /{0} lock list.");
+		instance.addDefault(defaults, Messages.ItemLocked, "Locked {0}. It will not be deposited.");
+		instance.addDefault(defaults, Messages.ItemUnlocked, "Unlocked {0}. It can be deposited again.");
+		instance.addDefault(defaults, Messages.ItemNotLocked, "{0} is not locked.");
+		instance.addDefault(defaults, Messages.ItemLockedByServer, "{0} is locked by the server and cannot be unlocked.");
+		instance.addDefault(defaults, Messages.UnknownItem, "Unknown item. Press Tab to pick one.");
+		instance.addDefault(defaults, Messages.LockListHeader, "Items that will not be deposited:");
+		instance.addDefault(defaults, Messages.LockListEntry, "{0} ({1})");
+		instance.addDefault(defaults, Messages.LockListEmpty, "No items are locked.");
+		instance.addDefault(defaults, Messages.LockOriginPlayer, "you");
+		instance.addDefault(defaults, Messages.LockOriginDefault, "default");
+		instance.addDefault(defaults, Messages.LockOriginServer, "server");
+		instance.addDefault(defaults, Messages.LockListUnlockButton, "[unlock]");
+		instance.addDefault(defaults, Messages.PlayerDataUnreadable, "Your settings file cannot be read, so deposits are paused. Ask an admin to fix it, then rejoin.");
+		instance.addDefault(defaults, Messages.PlayerDataSaveFailed, "Could not save the change, so nothing was changed. Tell an admin.");
 
 		//load the configuration file
 		FileConfiguration config = YamlConfiguration.loadConfiguration(localizationFile);

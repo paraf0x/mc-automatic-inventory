@@ -8,11 +8,15 @@ import org.bukkit.inventory.ItemStack;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 public class GlobalConfig {
+	private static final String VERSION_KEY = "Config Version";
+	private static final int VERSION = 2;
+
 	public static GlobalConfig instance;
 
 	public static boolean autosortEnabledByDefault = true;
@@ -41,6 +45,7 @@ public class GlobalConfig {
 		instance = new GlobalConfig();
 
 		var configFile = new File(dataFolder.getPath() + File.separatorChar + "config.yml");
+		var configExisted = configFile.exists();
 		FileConfiguration config = YamlConfiguration.loadConfiguration(configFile);
 		FileConfiguration outConfig = new YamlConfiguration();
 
@@ -62,11 +67,20 @@ public class GlobalConfig {
 		outConfig.set("Auto Refill.Excluded Items", autoRefillExcludedItemNames);
 
 		var autoDepositExcludedItemNames = config.getStringList("Auto Deposit.Excluded Items");
+		var canSave = true;
+		if (configExisted && config.getInt(VERSION_KEY, 1) < VERSION) {
+			// Version 2: arrows moved from this server-wide list to the default locks players can change
+			canSave = backUp(configFile);
+			if (canSave) {
+				autoDepositExcludedItemNames.removeIf(name -> {
+					var material = Material.matchMaterial(name);
+					return material != null && DepositLocks.DEFAULTS.contains(material);
+				});
+			}
+		}
+
 		if (autoDepositExcludedItemNames.size() == 0) {
 			autoDepositExcludedItemNames.add("AIR");
-			autoDepositExcludedItemNames.add("ARROW");
-			autoDepositExcludedItemNames.add("SPECTRAL_ARROW");
-			autoDepositExcludedItemNames.add("TIPPED_ARROW");
 		}
 
 		for (var itemName : autoDepositExcludedItemNames) {
@@ -89,12 +103,33 @@ public class GlobalConfig {
 			instance.excludeItemsContainingThisString.add(legacyExcludedItem);
 		}
 		outConfig.set("excludeItemsContainingThisString", instance.excludeItemsContainingThisString);
+		outConfig.set(VERSION_KEY, VERSION);
+
+		if (!canSave) {
+			return;
+		}
 
 		try {
 			outConfig.save(configFile);
 		} catch (IOException e) {
 			AutomaticInventory.log.warning("Encountered an issue while writing to the configuration file.");
 			e.printStackTrace();
+		}
+	}
+
+	private static boolean backUp(File configFile) {
+		var backup = new File(configFile.getPath() + ".bak");
+		if (backup.exists()) {
+			backup = new File(configFile.getPath() + ".bak-" + System.currentTimeMillis());
+		}
+
+		try {
+			Files.copy(configFile.toPath(), backup.toPath());
+			AutomaticInventory.log.info("Updating config.yml, the previous file was saved as " + backup.getName());
+			return true;
+		} catch (IOException e) {
+			AutomaticInventory.log.warning("Could not back up config.yml, so it was left unchanged: " + e);
+			return false;
 		}
 	}
 }

@@ -1,11 +1,18 @@
 package dev.chaws.automaticinventory.configuration;
 
 import java.io.File;
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.UUID;
+import java.util.function.Consumer;
 
 import dev.chaws.automaticinventory.AutomaticInventory;
+import org.bukkit.configuration.InvalidConfigurationException;
 import org.bukkit.configuration.file.FileConfiguration;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
@@ -30,7 +37,9 @@ public class PlayerConfig {
 	private boolean receivedDepositAllInfo = false;
 	private boolean usedDepositAll = false;
 	public int firstEmptySlot = -1;
-	private boolean isDirty = false;
+	private volatile boolean isDirty = false;
+	private boolean loadFailed = false;
+	private DepositLocks depositLocks = new DepositLocks(List.of(), List.of());
 
 	private PlayerConfig(Player player) {
 		this.playerName = player.getName();
@@ -46,6 +55,13 @@ public class PlayerConfig {
 	}
 
 	public static void initializePlayer(Player player) {
+		// On a quick rejoin the save from quitting may still be running
+		for (var data : player.getMetadata(METADATA_TAG)) {
+			if (data.value() instanceof PlayerConfig previous) {
+				previous.waitForSaveComplete();
+			}
+		}
+
 		new PlayerConfig(player);
 	}
 
@@ -63,6 +79,7 @@ public class PlayerConfig {
 	}
 
 	public void setUsedQuickDeposit(boolean usedQuickDeposit) {
+		this.waitForLoadComplete();
 		this.usedQuickDeposit = usedQuickDeposit;
 		this.isDirty = true;
 	}
@@ -72,6 +89,7 @@ public class PlayerConfig {
 	}
 
 	public void setUsedDepositAll(boolean usedDepositAll) {
+		this.waitForLoadComplete();
 		this.usedDepositAll = usedDepositAll;
 		this.isDirty = true;
 	}
@@ -81,6 +99,7 @@ public class PlayerConfig {
 	}
 
 	public void setReceivedChestSortInfo(boolean receivedChestSortInfo) {
+		this.waitForLoadComplete();
 		this.receivedChestSortInfo = receivedChestSortInfo;
 		this.isDirty = true;
 	}
@@ -90,6 +109,7 @@ public class PlayerConfig {
 	}
 
 	public void setReceivedInventorySortInfo(boolean receivedInventorySortInfo) {
+		this.waitForLoadComplete();
 		this.receivedInventorySortInfo = receivedInventorySortInfo;
 		this.isDirty = true;
 	}
@@ -99,6 +119,7 @@ public class PlayerConfig {
 	}
 
 	public void setReceivedRestackInfo(boolean receivedRestackInfo) {
+		this.waitForLoadComplete();
 		this.receivedRestackInfo = receivedRestackInfo;
 		this.isDirty = true;
 	}
@@ -127,6 +148,7 @@ public class PlayerConfig {
 	}
 
 	public void setSortChests(boolean sortChests) {
+		this.waitForLoadComplete();
 		this.isDirty = true;
 		this.sortChests = sortChests;
 	}
@@ -139,6 +161,7 @@ public class PlayerConfig {
 	}
 
 	public void setSortInventory(boolean sortInventory) {
+		this.waitForLoadComplete();
 		this.isDirty = true;
 		this.sortInventory = sortInventory;
 	}
@@ -151,6 +174,7 @@ public class PlayerConfig {
 	}
 
 	public void setQuickDepositEnabled(boolean quickDepositEnabled) {
+		this.waitForLoadComplete();
 		this.isDirty = true;
 		this.quickDepositEnabled = quickDepositEnabled;
 	}
@@ -163,6 +187,7 @@ public class PlayerConfig {
 	}
 
 	public void setAutoRefillEnabled(boolean autoRefillEnabled) {
+		this.waitForLoadComplete();
 		this.isDirty = true;
 		this.autoRefillEnabled = autoRefillEnabled;
 	}
@@ -175,13 +200,58 @@ public class PlayerConfig {
 		this.gotQuickDepositInfo = newValue;
 	}
 
+	public boolean isUnreadable() {
+		this.waitForLoadComplete();
+		return this.loadFailed;
+	}
+
+	public DepositLocks getDepositLocks() {
+		this.waitForLoadComplete();
+		return this.depositLocks;
+	}
+
+	/**
+	 * Applies a change to the locks and writes it to disk right away.
+	 *
+	 * @return false if it could not be saved, in which case the locks are unchanged
+	 */
+	public boolean updateDepositLocks(Consumer<DepositLocks> change) {
+		this.waitForLoadComplete();
+		if (this.loadFailed) {
+			return false;
+		}
+
+		this.waitForSaveComplete();
+		var previous = this.depositLocks;
+		this.depositLocks = previous.copy();
+		change.accept(this.depositLocks);
+		if (this.writeDataToFile(this.serialize())) {
+			this.isDirty = false;
+			return true;
+		}
+
+		this.depositLocks = previous;
+		return false;
+	}
+
 	public void saveChanges() {
-        if (!this.isDirty) {
-            return;
-        }
+		if (!this.isDirty) {
+			return;
+		}
 
 		this.waitForLoadComplete();
-		this.savingThread = new Thread(new DataSaver());
+		if (this.loadFailed) {
+			return;
+		}
+
+		this.waitForSaveComplete();
+		var data = this.serialize();
+		this.isDirty = false;
+		this.savingThread = new Thread(() -> {
+			if (!this.writeDataToFile(data)) {
+				this.isDirty = true;
+			}
+		});
 		this.savingThread.start();
 	}
 
@@ -204,29 +274,41 @@ public class PlayerConfig {
 		}
 	}
 
-	private void writeDataToFile() {
-		try {
-			FileConfiguration config = new YamlConfiguration();
-			config.set("Player Name", this.playerName);
-			config.set("Sort Chests", this.sortChests);
-			config.set("Sort Personal Inventory", this.sortInventory);
-			config.set("Quick Deposit Enabled", this.quickDepositEnabled);
-			config.set("Auto Refill Enabled", this.autoRefillEnabled);
-			config.set("Used Quick Deposit", this.usedQuickDeposit);
-			config.set("Received Messages.Personal Inventory", this.receivedInventorySortInfo);
-			config.set("Received Messages.Chest Inventory", this.receivedChestSortInfo);
-			config.set("Received Messages.Restacker", this.receivedRestackInfo);
-			config.set("Received Messages.Deposit All", this.receivedDepositAllInfo);
+	private String serialize() {
+		FileConfiguration config = new YamlConfiguration();
+		config.set("Player Name", this.playerName);
+		config.set("Sort Chests", this.sortChests);
+		config.set("Sort Personal Inventory", this.sortInventory);
+		config.set("Quick Deposit Enabled", this.quickDepositEnabled);
+		config.set("Auto Refill Enabled", this.autoRefillEnabled);
+		config.set("Used Quick Deposit", this.usedQuickDeposit);
+		config.set("Received Messages.Personal Inventory", this.receivedInventorySortInfo);
+		config.set("Received Messages.Chest Inventory", this.receivedChestSortInfo);
+		config.set("Received Messages.Restacker", this.receivedRestackInfo);
+		config.set("Received Messages.Deposit All", this.receivedDepositAllInfo);
+		config.set("Deposit Locks.Locked", this.depositLocks.getLocked());
+		config.set("Deposit Locks.Unlocked", this.depositLocks.getUnlocked());
+		return config.saveToString();
+	}
 
-			config.save(this.playerConfigFile);
-		} catch (Exception e) {
+	private boolean writeDataToFile(String data) {
+		var target = this.playerConfigFile.toPath();
+		var temporary = target.resolveSibling(target.getFileName() + ".tmp");
+		try {
+			Files.writeString(temporary, data);
+			try {
+				Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+			} catch (AtomicMoveNotSupportedException e) {
+				Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+			}
+
+			return true;
+		} catch (IOException e) {
 			var errors = new StringWriter();
 			e.printStackTrace(new PrintWriter(errors));
-			AutomaticInventory.log.info("Failed to save player data for " + playerID + " " + errors);
+			AutomaticInventory.log.warning("Failed to save player data for " + playerID + " " + errors);
+			return false;
 		}
-
-		this.savingThread = null;
-		this.isDirty = false;
 	}
 
 	private void readDataFromFile() {
@@ -240,7 +322,10 @@ public class PlayerConfig {
 		do {
 			try {
 				needRetry = false;
-				FileConfiguration config = YamlConfiguration.loadConfiguration(this.playerConfigFile);
+				// loadConfiguration() would turn a broken file into an empty one
+				var config = new YamlConfiguration();
+				config.load(this.playerConfigFile);
+				checkLockTypes(config);
 				this.sortChests = config.getBoolean("Sort Chests", GlobalConfig.autosortEnabledByDefault);
 				this.sortInventory = config.getBoolean("Sort Personal Inventory", GlobalConfig.autosortEnabledByDefault);
 				this.quickDepositEnabled = config.getBoolean("Quick Deposit Enabled", GlobalConfig.quickDepositEnabledByDefault);
@@ -250,6 +335,9 @@ public class PlayerConfig {
 				this.receivedInventorySortInfo = config.getBoolean("Received Messages.Personal Inventory", false);
 				this.receivedRestackInfo = config.getBoolean("Received Messages.Restacker", false);
 				this.receivedDepositAllInfo = config.getBoolean("Received Messages.Deposit All", false);
+				this.depositLocks = new DepositLocks(
+					config.getStringList("Deposit Locks.Locked"),
+					config.getStringList("Deposit Locks.Unlocked"));
 			}
 
 			//if there's any problem with the file's content, retry up to 5 times with 5 milliseconds between
@@ -270,16 +358,23 @@ public class PlayerConfig {
 
 		//if last attempt failed, log information about the problem
 		if (needRetry) {
+			this.loadFailed = true;
 			var errors = new StringWriter();
 			latestException.printStackTrace(new PrintWriter(errors));
-			AutomaticInventory.log.info("Failed to load data for " + playerID + " " + errors);
+			AutomaticInventory.log.warning("Failed to load data for " + playerID + ". The file is left untouched and deposits are paused for this player until it is fixed and they rejoin. " + errors);
 		}
 	}
 
-	private class DataSaver implements Runnable {
-		@Override
-		public void run() {
-			writeDataToFile();
+	// getStringList() returns an empty list for other types, and the next save would write that over the file
+	private static void checkLockTypes(FileConfiguration config) throws InvalidConfigurationException {
+		if (config.isSet("Deposit Locks") && !config.isConfigurationSection("Deposit Locks")) {
+			throw new InvalidConfigurationException("Deposit Locks must be a section");
+		}
+
+		for (var path : List.of("Deposit Locks.Locked", "Deposit Locks.Unlocked")) {
+			if (config.isSet(path) && !config.isList(path)) {
+				throw new InvalidConfigurationException(path + " must be a list");
+			}
 		}
 	}
 
@@ -295,6 +390,7 @@ public class PlayerConfig {
 	}
 
 	public void setReceivedDepositAllInfo(boolean status) {
+		this.waitForLoadComplete();
 		this.receivedDepositAllInfo = status;
 		this.isDirty = true;
 	}

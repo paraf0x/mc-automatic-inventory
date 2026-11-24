@@ -23,5 +23,20 @@ public enum Messages {
 	QuickDepositDisabled,
 	AutoRefillHelp,
 	AutoRefillEnabled,
-	AutoRefillDisabled
+	AutoRefillDisabled,
+	DepositAllHelp,
+	ItemLocked,
+	ItemUnlocked,
+	ItemNotLocked,
+	ItemLockedByServer,
+	UnknownItem,
+	LockListHeader,
+	LockListEntry,
+	LockListEmpty,
+	LockOriginPlayer,
+	LockOriginDefault,
+	LockOriginServer,
+	LockListUnlockButton,
+	PlayerDataUnreadable,
+	PlayerDataSaveFailed
 }
